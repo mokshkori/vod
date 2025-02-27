@@ -32,7 +32,7 @@ services:
 
   lecture-service:
     build:
-      context: ./lecture-service  # Ensure correct path to your Dockerfile
+      context: ./lecture-service
       dockerfile: Dockerfile
     container_name: lecture-service
     ports:
@@ -41,8 +41,10 @@ services:
       SPRING_APPLICATION_JSON: >
         {
           "spring.application.name": "lecture-service",
-          "spring.kafka.bootstrap-servers": "kafka:9092",
-          "topics.lecture.viewed": "lecture-viewed"
+          "spring.kafka.bootstrap-servers": "kafka:9093",
+          "topics.lecture.viewed": "lecture-viewed",
+          "management.endpoints.web.exposure.include": "health,metrics,info,env,beans",
+          "management.endpoint.health.show-details": "always"
         }
 
     depends_on:
