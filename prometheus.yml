@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 5s  # Collect metrics every 5 seconds
+
+scrape_configs:
+  - job_name: 'lecture-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['lecture-service:8080']
+
+  - job_name: 'lecture-consumer'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['lecture-consumer:8082']

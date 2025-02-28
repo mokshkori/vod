@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   kafka:
     image: apache/kafka-native
@@ -9,15 +7,14 @@ services:
       KAFKA_LISTENERS: CONTROLLER://localhost:9091,HOST://0.0.0.0:9092,DOCKER://0.0.0.0:9093
       KAFKA_ADVERTISED_LISTENERS: HOST://localhost:9092,DOCKER://kafka:9093
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,DOCKER:PLAINTEXT,HOST:PLAINTEXT
-
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9091
-
       KAFKA_INTER_BROKER_LISTENER_NAME: DOCKER
-
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - kafka-network
 
   kafka-ui:
     image: ghcr.io/kafbat/kafka-ui:latest
@@ -27,6 +24,8 @@ services:
       DYNAMIC_CONFIG_ENABLED: "true"
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9093
+    networks:
+      - kafka-network
     depends_on:
       - kafka
 
@@ -38,14 +37,66 @@ services:
     ports:
       - "8080:8080"
     environment:
-      SPRING_APPLICATION_JSON: >
-        {
-          "spring.application.name": "lecture-service",
-          "spring.kafka.bootstrap-servers": "kafka:9093",
-          "topics.lecture.viewed": "lecture-viewed",
-          "management.endpoints.web.exposure.include": "health,metrics,info,env,beans",
-          "management.endpoint.health.show-details": "always"
-        }
-
+      - spring.application.name=lecture-service
+      - spring.kafka.bootstrap-servers=kafka:9093
+      - topics.lecture.viewed=lecture-viewed
+      - management.endpoint.health.show-details=always
+      - management.endpoints.web.exposure.include=prometheus,health,metrics
+      - management.prometheus.metrics.export.enabled=true
+    networks:
+      - kafka-network
     depends_on:
       - kafka
+
+  lecture-consumer:
+    build:
+      context: ./lecture-consumer
+      dockerfile: Dockerfile
+    container_name: lecture-consumer
+    ports:
+      - "8082:8082"
+    environment:
+      - spring.application.name=lecture-consumer
+      - server.port=8082
+      - spring.kafka.bootstrap-servers=kafka:9093
+      - spring.kafka.consumer.group-id=lecture-consumer-group
+      - spring.kafka.consumer.auto-offset-reset=earliest
+      - spring.kafka.consumer.key-deserializer=org.apache.kafka.common.serialization.StringDeserializer
+      - spring.kafka.consumer.value-deserializer=org.apache.kafka.common.serialization.StringDeserializer
+      - management.endpoint.health.show-details=always
+      - management.endpoints.web.exposure.include=prometheus,health,metrics
+      - management.prometheus.metrics.export.enabled=true
+    networks:
+      - kafka-network
+    depends_on:
+      - kafka
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - kafka-network
+    depends_on:
+      - lecture-service
+      - lecture-consumer
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks:
+      - kafka-network
+    depends_on:
+      - prometheus
+
+networks:
+  kafka-network:
+    driver: bridge
